@@ -1,0 +1,13 @@
+
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.coverage
+.env
+data/
+*.db
+*.sqlite
+*.sqlite3
+.vscode/
+app/main.backup.py
