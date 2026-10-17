@@ -179,7 +179,8 @@ def test_follow_up_updates_sow_and_reports_scope_changes(monkeypatch):
     assert result["sow"]["id"] == sow_id
     assert result["sow"]["status"] == "pending_review"
     assert result["sow"]["review_required"] is True
-    assert result["sow"]["source_transcript"] == follow_up_transcript
+    assert TRANSCRIPT.strip() in result["sow"]["source_transcript"]
+    assert follow_up_transcript.strip() in result["sow"]["source_transcript"]
     assert result["changes"]["scope_unchanged"] is False
     assert isinstance(result["changes"]["added_scope"], list)
     assert isinstance(result["changes"]["removed_scope"], list)
@@ -190,7 +191,8 @@ def test_follow_up_updates_sow_and_reports_scope_changes(monkeypatch):
     retrieved = client.get(f"/sow/{sow_id}")
 
     assert retrieved.status_code == 200
-    assert retrieved.json()["source_transcript"] == follow_up_transcript
+    assert TRANSCRIPT.strip() in retrieved.json()["source_transcript"]
+    assert follow_up_transcript.strip() in retrieved.json()["source_transcript"]
 
 
 def test_follow_up_unknown_sow_returns_404():

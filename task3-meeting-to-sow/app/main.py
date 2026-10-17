@@ -388,15 +388,13 @@ def get_sow(sow_id: str):
 # FOLLOW-UP MEETING
 # ---------------------------------------------------------
 
+
 @app.post("/sow/{sow_id}/follow-up")
 def follow_up_sow(sow_id: str, request: FollowUpRequest):
     previous = fetch_sow(sow_id)
 
     if previous is None:
-        raise HTTPException(
-            status_code=404,
-            detail="SOW not found.",
-        )
+        raise HTTPException(status_code=404, detail="SOW not found.")
 
     if previous["status"] != "pending_review":
         raise HTTPException(
@@ -412,36 +410,68 @@ def follow_up_sow(sow_id: str, request: FollowUpRequest):
 
     try:
         analysis = analyze_transcript(request.transcript)
-
     except ValueError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    # Compare the new analysis against the previous SOW scope.
-    previous_scope = {
-        item["text"] for item in previous["scope"]
-    }
+    def merge_items(old_items, new_items):
+        """Preserve existing items and append new items without duplicates."""
+        merged = list(old_items)
+        seen = {item["text"].strip().casefold() for item in merged}
 
-    updated_scope = {
-        item["text"] for item in analysis["scope"]
-    }
+        for item in new_items:
+            key = item["text"].strip().casefold()
+            if key not in seen:
+                merged.append(item)
+                seen.add(key)
+
+        return merged
+
+    # Preserve the existing scope and add new requirements.
+    updated_scope = merge_items(previous["scope"], analysis["scope"])
+
+    previous_scope_text = {item["text"] for item in previous["scope"]}
+    updated_scope_text = {item["text"] for item in updated_scope}
 
     changes = {
-        "added_scope": sorted(updated_scope - previous_scope),
-        "removed_scope": sorted(previous_scope - updated_scope),
-        "scope_unchanged": previous_scope == updated_scope,
+        "added_scope": sorted(updated_scope_text - previous_scope_text),
+        "removed_scope": [],
+        "scope_unchanged": updated_scope_text == previous_scope_text,
+        "note": (
+            "Existing scope is preserved automatically. "
+            "Potential removals must be confirmed by a human reviewer."
+        ),
     }
+
+    # Merge the remaining sections rather than overwriting earlier decisions.
+    updated_deliverables = merge_items(
+        previous["deliverables"], analysis["deliverables"]
+    )
+    updated_assumptions = merge_items(
+        previous["assumptions"], analysis["assumptions"]
+    )
+    updated_exclusions = merge_items(
+        previous["exclusions"], analysis["exclusions"]
+    )
+    updated_questions = merge_items(
+        previous["open_questions"], analysis["open_questions"]
+    )
 
     feasibility = check_product_feasibility(request.transcript)
 
-    notes = [
+    combined_transcript = (
+        previous["source_transcript"].rstrip()
+        + "\n\n--- Follow-up meeting ---\n"
+        + request.transcript.strip()
+    )
+
+    notes = list(previous["notes"])
+    notes.extend([
         "Updated using a follow-up meeting transcript.",
-        "Review changes against the original scope before approval.",
+        "Existing scope was preserved; new items were merged without duplicates.",
+        "Review possible removals and all changes before approval.",
         "Effort estimates, costs, and delivery dates require human validation.",
-        f"Product feasibility status: {feasibility['status']}.",
-    ]
+        f"Latest product feasibility status: {feasibility['status']}.",
+    ])
 
     try:
         with get_connection() as connection:
@@ -459,12 +489,12 @@ def follow_up_sow(sow_id: str, request: FollowUpRequest):
                 WHERE id = ? AND status = 'pending_review'
                 """,
                 (
-                    json.dumps(analysis["scope"]),
-                    json.dumps(analysis["deliverables"]),
-                    json.dumps(analysis["assumptions"]),
-                    json.dumps(analysis["exclusions"]),
-                    json.dumps(analysis["open_questions"]),
-                    request.transcript,
+                    json.dumps(updated_scope),
+                    json.dumps(updated_deliverables),
+                    json.dumps(updated_assumptions),
+                    json.dumps(updated_exclusions),
+                    json.dumps(updated_questions),
+                    combined_transcript,
                     json.dumps(notes),
                     sow_id,
                 ),
@@ -478,7 +508,6 @@ def follow_up_sow(sow_id: str, request: FollowUpRequest):
 
     except HTTPException:
         raise
-
     except sqlite3.Error as exc:
         raise HTTPException(
             status_code=500,
