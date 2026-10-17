@@ -1,6 +1,7 @@
 
 import os
 import re
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -178,12 +179,11 @@ def ask_question(request: AskRequest):
         return result
 
     except Exception as exc:
+        logging.exception("Knowledge Brain /ask failed")
         raise HTTPException(
             status_code=502,
             detail="The answering service failed. Check the server logs.",
         ) from exc
-
-
 # Escalation endpoints
 
 @router.post(

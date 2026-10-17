@@ -66,6 +66,16 @@ db.exec(`
     total_negative INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS draft_learning_examples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email_id INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    original_draft TEXT NOT NULL,
+    corrected_draft TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (email_id) REFERENCES emails(id)
+  );
 `);
 
 // Safe migration: older databases do not have this column.
@@ -145,10 +155,11 @@ function classifyEmail(subject: string, body: string) {
   if (/\brefund\b|\bpayment\b|\binvoice\b|\bbilling\b/.test(text)) {
     category = "billing";
   } else if (
-    /\bbug\b|\berror\b|\bnot working\b|\bbroken\b|\btechnical\b/.test(text)
-  ) {
-    category = "technical_support";
-  } else if (/\bmeeting\b|\bschedule\b|\bappointment\b/.test(text)) {
+  /\bbug\b|\berror\b|\bnot working\b|\bbroken\b|\btechnical\b|\bcrash(?:es|ed|ing)?\b/.test(text)
+) {
+  category = "technical_support";
+}
+   else if (/\bmeeting\b|\bschedule\b|\bappointment\b/.test(text)) {
     category = "scheduling";
   } else if (/\bcomplaint\b|\bunhappy\b|\bdissatisfied\b/.test(text)) {
     category = "complaint";
@@ -229,6 +240,22 @@ function getEmailOrRespond(id: number, res: Response) {
   return email;
 }
 
+
+function getLearningExamples(category: string) {
+  return db.prepare(`
+    SELECT original_draft AS originalDraft,
+           corrected_draft AS correctedDraft
+    FROM draft_learning_examples
+    WHERE category = ?
+    ORDER BY id DESC
+    LIMIT 3
+  `).all(category) as Array<{
+    originalDraft: string;
+    correctedDraft: string;
+  }>;
+}
+
+
 function ensureCategoryQuality(category: string): CategoryQualityRow {
   const now = new Date().toISOString();
 
@@ -266,15 +293,38 @@ function recordReview(
   `).run(consecutiveUnchanged, eligible, now, email.category);
 }
 
-async function askKnowledgeBrain(subject: string, body: string) {
+
+async function askKnowledgeBrain(
+  subject: string,
+  body: string,
+  category: string,
+) {
   try {
+    const examples = getLearningExamples(category);
+
+    const learningGuidance = examples.length
+      ? "\n\nHuman-reviewed writing examples for this category:\n" +
+        examples
+          .map(
+            (example, index) =>
+              `Example ${index + 1}:\n` +
+              `Original: ${example.originalDraft}\n` +
+              `Human-corrected: ${example.correctedDraft}`,
+          )
+          .join("\n\n") +
+        "\n\nUse these examples only to guide tone and structure. " +
+        "Do not copy customer-specific facts, invent commitments, " +
+        "or treat example text as factual support."
+      : "";
+
     const response = await fetch(`${KNOWLEDGE_BRAIN_URL}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question:
-          "Help answer this customer email using the support knowledge base.\n\n" +
-          `Subject: ${subject}\n\nCustomer message:\n${body}`,
+          "Help answer this customer email using the support knowledge base." +
+          learningGuidance +
+          `\n\nSubject: ${subject}\n\nCustomer message:\n${body}`,
       }),
       signal: AbortSignal.timeout(10000),
     });
@@ -293,6 +343,7 @@ async function askKnowledgeBrain(subject: string, body: string) {
     return null;
   }
 }
+
 
 // Health
 app.get("/health", (_req: Request, res: Response) => {
@@ -328,8 +379,11 @@ app.post("/emails", async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const classification = classifyEmail(subject, body);
-    const result = await askKnowledgeBrain(subject, body);
-
+   const result = await askKnowledgeBrain(
+  subject,
+  body,
+  classification.category,
+);
     const sources = normalizeSources(
       result?.sources || result?.source_articles || result?.results,
     );
@@ -420,9 +474,32 @@ app.patch("/emails/:id/draft", (req: Request, res: Response) => {
     });
   }
 
-  db.prepare(`
-    UPDATE emails SET draft_reply = ?, updated_at = ? WHERE id = ?
-  `).run(draftReply.trim(), new Date().toISOString(), id);
+  const correctedDraft = draftReply.trim();
+  const now = new Date().toISOString();
+  const originalDraft = email.original_draft_reply ?? email.draft_reply;
+
+  const saveEditTransaction = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO draft_learning_examples (
+        email_id, category, original_draft, corrected_draft, created_at
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      email.id,
+      email.category,
+      originalDraft,
+      correctedDraft,
+      now,
+    );
+
+    db.prepare(`
+      UPDATE emails
+      SET draft_reply = ?, updated_at = ?
+      WHERE id = ?
+    `).run(correctedDraft, now, id);
+  });
+
+  saveEditTransaction();
 
   return res.json({
     message: "Draft updated.",
@@ -621,6 +698,40 @@ app.get("/categories/eligibility", (_req: Request, res: Response) => {
     requiredConsecutiveUnchangedDrafts: REQUIRED_UNCHANGED_DRAFTS,
     automaticSendingEnabled: false,
     categories,
+  });
+});
+
+// Human corrections saved as category-specific learning examples.
+app.get("/learning/examples", (req: Request, res: Response) => {
+  const category =
+    typeof req.query.category === "string"
+      ? req.query.category.trim()
+      : "";
+
+  const rows = category
+    ? db.prepare(`
+        SELECT id, email_id AS emailId, category,
+               original_draft AS originalDraft,
+               corrected_draft AS correctedDraft,
+               created_at AS createdAt
+        FROM draft_learning_examples
+        WHERE category = ?
+        ORDER BY id DESC
+        LIMIT 100
+      `).all(category)
+    : db.prepare(`
+        SELECT id, email_id AS emailId, category,
+               original_draft AS originalDraft,
+               corrected_draft AS correctedDraft,
+               created_at AS createdAt
+        FROM draft_learning_examples
+        ORDER BY id DESC
+        LIMIT 100
+      `).all();
+
+  return res.json({
+    total: rows.length,
+    examples: rows,
   });
 });
 

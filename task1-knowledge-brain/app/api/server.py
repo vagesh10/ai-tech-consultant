@@ -1,5 +1,9 @@
+﻿from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from app.api.routes import router
 

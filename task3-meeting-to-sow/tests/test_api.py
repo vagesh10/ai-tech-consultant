@@ -128,3 +128,105 @@ def test_approval_of_unknown_sow_returns_404():
     )
 
     assert response.status_code == 404
+
+
+import app.main as main_module
+
+
+MOCK_FEASIBILITY = {
+    "status": "unknown",
+    "answer": "Mock response for testing.",
+    "sources": [],
+    "abstained": True,
+    "mock_response": True,
+    "note": "Test-only mock.",
+}
+
+
+def test_follow_up_updates_sow_and_reports_scope_changes(monkeypatch):
+    monkeypatch.setattr(
+        main_module,
+        "check_product_feasibility",
+        lambda request_text: MOCK_FEASIBILITY,
+    )
+
+    created = client.post(
+        "/sow/generate",
+        json={"transcript": TRANSCRIPT},
+    )
+
+    assert created.status_code == 200
+    sow_id = created.json()["id"]
+
+    follow_up_transcript = """
+    Client: We need a customer portal with login, invoice downloads,
+    and report exports.
+    Consultant: We will develop the portal and integrate the billing API.
+    Client: We assume the billing API documentation will be available.
+    Consultant: Mobile app development is out of scope.
+    Client: We need to confirm multi-language support.
+    """
+
+    response = client.post(
+        f"/sow/{sow_id}/follow-up",
+        json={"transcript": follow_up_transcript},
+    )
+
+    assert response.status_code == 200
+
+    result = response.json()
+
+    assert result["sow"]["id"] == sow_id
+    assert result["sow"]["status"] == "pending_review"
+    assert result["sow"]["review_required"] is True
+    assert result["sow"]["source_transcript"] == follow_up_transcript
+    assert result["changes"]["scope_unchanged"] is False
+    assert isinstance(result["changes"]["added_scope"], list)
+    assert isinstance(result["changes"]["removed_scope"], list)
+    assert result["product_feasibility"]["status"] == "unknown"
+    assert result["review_required"] is True
+
+    # Verify the updated SOW is persisted.
+    retrieved = client.get(f"/sow/{sow_id}")
+
+    assert retrieved.status_code == 200
+    assert retrieved.json()["source_transcript"] == follow_up_transcript
+
+
+def test_follow_up_unknown_sow_returns_404():
+    response = client.post(
+        "/sow/does-not-exist/follow-up",
+        json={"transcript": "We need an additional reporting feature."},
+    )
+
+    assert response.status_code == 404
+
+
+def test_follow_up_rejects_approved_sow(monkeypatch):
+    monkeypatch.setattr(
+        main_module,
+        "check_product_feasibility",
+        lambda request_text: MOCK_FEASIBILITY,
+    )
+
+    created = client.post(
+        "/sow/generate",
+        json={"transcript": TRANSCRIPT},
+    )
+
+    assert created.status_code == 200
+    sow_id = created.json()["id"]
+
+    approval = client.post(
+        f"/sow/{sow_id}/approve",
+        json={"reviewer": "Project Manager"},
+    )
+
+    assert approval.status_code == 200
+
+    response = client.post(
+        f"/sow/{sow_id}/follow-up",
+        json={"transcript": "We need an additional reporting feature."},
+    )
+
+    assert response.status_code == 409

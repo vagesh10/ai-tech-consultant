@@ -1,4 +1,4 @@
-# Preserve existing task repositories outside the root commit
+﻿# Preserve task repositories outside the root commit
 task1-knowledge-brain/.git/
 task2-inbox-agent/.git/
 task3-meeting-to-sow/.git/
@@ -22,6 +22,10 @@ task3-meeting-to-sow/.git/
 
 # Local databases, indexes, and generated data
 **/data/
+!task2-inbox-agent/data/
+task2-inbox-agent/data/*
+!task2-inbox-agent/data/email_dataset_50.json
+!task2-inbox-agent/data/classification_eval_20.json
 **/chroma_db/
 **/*.db
 **/*.sqlite

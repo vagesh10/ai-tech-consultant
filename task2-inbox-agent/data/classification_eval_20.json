@@ -1,0 +1,162 @@
+[
+  {
+    "id": "email-001",
+    "subject": "Invoice total seems incorrect",
+    "body": "The invoice total is higher than the amount shown in my order confirmation.",
+    "expectedCategory": "billing",
+    "expectedPriority": "normal",
+    "scenarioGroup": "billing"
+  },
+  {
+    "id": "email-002",
+    "subject": "Urgent refund request",
+    "body": "Please process my refund ASAP; I have been waiting for a week.",
+    "expectedCategory": "billing",
+    "expectedPriority": "high",
+    "scenarioGroup": "billing"
+  },
+  {
+    "id": "email-003",
+    "subject": "Payment confirmation missing",
+    "body": "I made a payment yesterday but have not received a confirmation.",
+    "expectedCategory": "billing",
+    "expectedPriority": "normal",
+    "scenarioGroup": "billing"
+  },
+  {
+    "id": "email-004",
+    "subject": "Question about monthly billing",
+    "body": "Could you explain the billing breakdown for this month?",
+    "expectedCategory": "billing",
+    "expectedPriority": "normal",
+    "scenarioGroup": "billing"
+  },
+  {
+    "id": "email-011",
+    "subject": "Dashboard page is broken",
+    "body": "The dashboard page is broken and shows a blank screen.",
+    "expectedCategory": "technical_support",
+    "expectedPriority": "normal",
+    "scenarioGroup": "technical"
+  },
+  {
+    "id": "email-012",
+    "subject": "Urgent login error",
+    "body": "I get an error when signing in. Please help immediately.",
+    "expectedCategory": "technical_support",
+    "expectedPriority": "high",
+    "scenarioGroup": "technical"
+  },
+  {
+    "id": "email-013",
+    "subject": "Export feature not working",
+    "body": "The CSV export is not working for any report.",
+    "expectedCategory": "technical_support",
+    "expectedPriority": "normal",
+    "scenarioGroup": "technical"
+  },
+  {
+    "id": "email-014",
+    "subject": "Bug after latest update",
+    "body": "I found a bug after the latest update; the save button does nothing.",
+    "expectedCategory": "technical_support",
+    "expectedPriority": "normal",
+    "scenarioGroup": "technical"
+  },
+  {
+    "id": "email-021",
+    "subject": "Schedule a product walkthrough",
+    "body": "Could we schedule a product walkthrough next week?",
+    "expectedCategory": "scheduling",
+    "expectedPriority": "normal",
+    "scenarioGroup": "scheduling"
+  },
+  {
+    "id": "email-022",
+    "subject": "Urgent meeting change",
+    "body": "Please change our meeting immediately because I have a conflict.",
+    "expectedCategory": "scheduling",
+    "expectedPriority": "high",
+    "scenarioGroup": "scheduling"
+  },
+  {
+    "id": "email-023",
+    "subject": "Appointment availability",
+    "body": "What appointment times are available on Friday?",
+    "expectedCategory": "scheduling",
+    "expectedPriority": "normal",
+    "scenarioGroup": "scheduling"
+  },
+  {
+    "id": "email-024",
+    "subject": "Reschedule meeting",
+    "body": "I need to reschedule our meeting to Tuesday afternoon.",
+    "expectedCategory": "scheduling",
+    "expectedPriority": "normal",
+    "scenarioGroup": "scheduling"
+  },
+  {
+    "id": "email-031",
+    "subject": "Dissatisfied with response",
+    "body": "I am dissatisfied with the response I received from support.",
+    "expectedCategory": "complaint",
+    "expectedPriority": "normal",
+    "scenarioGroup": "complaint"
+  },
+  {
+    "id": "email-032",
+    "subject": "Urgent customer complaint",
+    "body": "I am unhappy with the service and need this reviewed immediately.",
+    "expectedCategory": "complaint",
+    "expectedPriority": "high",
+    "scenarioGroup": "complaint"
+  },
+  {
+    "id": "email-033",
+    "subject": "Formal complaint about delay",
+    "body": "I would like to file a complaint about the long delay.",
+    "expectedCategory": "complaint",
+    "expectedPriority": "normal",
+    "scenarioGroup": "complaint"
+  },
+  {
+    "id": "email-034",
+    "subject": "Unhappy with onboarding",
+    "body": "We are unhappy with the onboarding experience so far.",
+    "expectedCategory": "complaint",
+    "expectedPriority": "normal",
+    "scenarioGroup": "complaint"
+  },
+  {
+    "id": "email-041",
+    "subject": "Request for product information",
+    "body": "Could you share an overview of the product features?",
+    "expectedCategory": "general",
+    "expectedPriority": "normal",
+    "scenarioGroup": "general"
+  },
+  {
+    "id": "email-042",
+    "subject": "Urgent request for documentation",
+    "body": "Please send the documentation immediately.",
+    "expectedCategory": "general",
+    "expectedPriority": "high",
+    "scenarioGroup": "general"
+  },
+  {
+    "id": "email-043",
+    "subject": "Thank you for the demonstration",
+    "body": "Thank you for the helpful demonstration yesterday.",
+    "expectedCategory": "general",
+    "expectedPriority": "normal",
+    "scenarioGroup": "general"
+  },
+  {
+    "id": "email-044",
+    "subject": "Question about account profile",
+    "body": "Where can I update the company name in my profile?",
+    "expectedCategory": "general",
+    "expectedPriority": "normal",
+    "scenarioGroup": "general"
+  }
+]

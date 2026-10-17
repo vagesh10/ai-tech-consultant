@@ -1,6 +1,8 @@
 ﻿import json
 import os
 import sqlite3
+import urllib.error
+import urllib.request
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,17 +13,31 @@ from app.analyzer import analyze_transcript
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
 DB_PATH = Path(
     os.getenv("SOW_DB_PATH", str(BASE_DIR / "data" / "sows.db"))
 )
+
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+KNOWLEDGE_BRAIN_URL = os.getenv(
+    "KNOWLEDGE_BRAIN_URL",
+    "http://127.0.0.1:8000",
+).rstrip("/")
 
 app = FastAPI(
     title="Meeting-to-SOW API",
-    description="Analyze meeting transcripts and create draft Statements of Work.",
-    version="1.1.0",
+    description=(
+        "Analyze meeting transcripts, check product-support documentation, "
+        "and create draft Statements of Work."
+    ),
+    version="1.2.0",
 )
 
+
+# ---------------------------------------------------------
+# DATABASE
+# ---------------------------------------------------------
 
 def get_connection() -> sqlite3.Connection:
     connection = sqlite3.connect(DB_PATH, timeout=10)
@@ -58,6 +74,10 @@ def startup() -> None:
     initialize_database()
 
 
+# ---------------------------------------------------------
+# REQUEST MODELS
+# ---------------------------------------------------------
+
 class TranscriptRequest(BaseModel):
     transcript: str = Field(
         min_length=1,
@@ -68,6 +88,17 @@ class TranscriptRequest(BaseModel):
 class SOWApprovalRequest(BaseModel):
     reviewer: str = Field(min_length=1, max_length=100)
 
+
+class FollowUpRequest(BaseModel):
+    transcript: str = Field(
+        min_length=1,
+        description="The follow-up meeting transcript.",
+    )
+
+
+# ---------------------------------------------------------
+# DATABASE HELPERS
+# ---------------------------------------------------------
 
 def row_to_sow(row: sqlite3.Row) -> dict:
     return {
@@ -98,22 +129,115 @@ def fetch_sow(sow_id: str) -> dict | None:
     return row_to_sow(row) if row else None
 
 
+# ---------------------------------------------------------
+# TASK 1: KNOWLEDGE BRAIN INTEGRATION
+# ---------------------------------------------------------
+
+def check_product_feasibility(request_text: str) -> dict:
+    """
+    Ask Task 1 whether retrieved support documentation supports
+    a potential product-settings solution.
+
+    An unavailable or mock response is not treated as verified
+    evidence that a feature is supported.
+    """
+
+    payload = json.dumps(
+        {
+            "question": (
+                "Assess whether the following requested feature may be "
+                "possible using existing Brilliant Directories product "
+                "settings rather than custom development. Use only the "
+                "retrieved support documentation and cite its sources. "
+                "If the evidence is insufficient, explicitly state that "
+                "the answer is unknown. Do not invent product capabilities. "
+                f"Request: {request_text}"
+            )
+        }
+    ).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{KNOWLEDGE_BRAIN_URL}/ask",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+        answer = result.get("answer", "")
+        sources = result.get("sources", [])
+        abstained = result.get("abstained", True)
+
+        # Task 1 may be running in mock mode. Do not mistake its
+        # local test response for an actual product feasibility answer.
+        is_mock_response = (
+            "not a real Claude-generated answer" in answer.lower()
+        )
+
+        if abstained or is_mock_response or not sources:
+            status = "unknown"
+        else:
+            status = "review_required"
+
+        return {
+            "status": status,
+            "answer": answer,
+            "sources": sources,
+            "abstained": abstained,
+            "mock_response": is_mock_response,
+            "note": (
+                "A human must verify the cited documentation before "
+                "deciding whether custom development is required."
+            ),
+        }
+
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        json.JSONDecodeError,
+    ) as exc:
+        return {
+            "status": "unavailable",
+            "answer": "",
+            "sources": [],
+            "abstained": True,
+            "mock_response": False,
+            "note": (
+                "Knowledge Brain could not be reached. "
+                f"Error type: {type(exc).__name__}."
+            ),
+        }
+
+
+# ---------------------------------------------------------
+# HEALTH CHECK
+# ---------------------------------------------------------
+
 @app.get("/health")
 def health():
     try:
         with get_connection() as connection:
             connection.execute("SELECT 1")
+
         return {
             "status": "healthy",
             "service": "meeting-to-sow",
             "database": "connected",
         }
+
     except sqlite3.Error as exc:
         raise HTTPException(
             status_code=503,
             detail="Database unavailable.",
         ) from exc
 
+
+# ---------------------------------------------------------
+# ANALYZE TRANSCRIPT
+# ---------------------------------------------------------
 
 @app.post("/analyze")
 def analyze(request: TranscriptRequest):
@@ -125,9 +249,17 @@ def analyze(request: TranscriptRequest):
 
     try:
         return analyze_transcript(request.transcript)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+
+# ---------------------------------------------------------
+# GENERATE SOW
+# ---------------------------------------------------------
 
 @app.post("/sow/generate")
 def generate_sow(request: TranscriptRequest):
@@ -139,8 +271,33 @@ def generate_sow(request: TranscriptRequest):
 
     try:
         analysis = analyze_transcript(request.transcript)
+
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    # Check the knowledge base before finalizing the draft.
+    feasibility = check_product_feasibility(request.transcript)
+
+    notes = [
+        "This is a draft SOW generated using rule-based extraction.",
+        (
+            "Confirm scope, deliverables, estimates, and commercial terms "
+            "before approval."
+        ),
+        "No effort, cost, or delivery timeline has been invented.",
+        (
+            "Product feasibility status: "
+            f"{feasibility['status']}."
+        ),
+    ]
+
+    if feasibility["status"] != "review_required":
+        notes.append(
+            "Product-settings feasibility remains unverified."
+        )
 
     sow = {
         "id": str(uuid4()),
@@ -154,11 +311,7 @@ def generate_sow(request: TranscriptRequest):
         "source_transcript": request.transcript,
         "review_required": True,
         "approved_by": None,
-        "notes": [
-            "This is a draft SOW generated using rule-based extraction.",
-            "Confirm scope, deliverables, estimates, and commercial terms before approval.",
-            "No effort, cost, or delivery timeline has been invented.",
-        ],
+        "notes": notes,
     }
 
     try:
@@ -166,11 +319,20 @@ def generate_sow(request: TranscriptRequest):
             connection.execute(
                 """
                 INSERT INTO sows (
-                    id, status, project_name, scope_json,
-                    deliverables_json, assumptions_json, exclusions_json,
-                    open_questions_json, source_transcript,
-                    review_required, approved_by, notes_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id,
+                    status,
+                    project_name,
+                    scope_json,
+                    deliverables_json,
+                    assumptions_json,
+                    exclusions_json,
+                    open_questions_json,
+                    source_transcript,
+                    review_required,
+                    approved_by,
+                    notes_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     sow["id"],
@@ -187,6 +349,7 @@ def generate_sow(request: TranscriptRequest):
                     json.dumps(sow["notes"]),
                 ),
             )
+
     except sqlite3.Error as exc:
         raise HTTPException(
             status_code=500,
@@ -194,25 +357,152 @@ def generate_sow(request: TranscriptRequest):
         ) from exc
 
     saved_sow = fetch_sow(sow["id"])
-    if saved_sow is None:
-        raise HTTPException(status_code=500, detail="SOW could not be retrieved.")
 
+    if saved_sow is None:
+        raise HTTPException(
+            status_code=500,
+            detail="SOW could not be retrieved.",
+        )
+
+    saved_sow["product_feasibility"] = feasibility
     return saved_sow
 
+# ---------------------------------------------------------
+# GET SOW
+# ---------------------------------------------------------
 
 @app.get("/sow/{sow_id}")
 def get_sow(sow_id: str):
     sow = fetch_sow(sow_id)
 
     if sow is None:
-        raise HTTPException(status_code=404, detail="SOW not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="SOW not found.",
+        )
 
     return sow
 
 
+# ---------------------------------------------------------
+# FOLLOW-UP MEETING
+# ---------------------------------------------------------
+
+@app.post("/sow/{sow_id}/follow-up")
+def follow_up_sow(sow_id: str, request: FollowUpRequest):
+    previous = fetch_sow(sow_id)
+
+    if previous is None:
+        raise HTTPException(
+            status_code=404,
+            detail="SOW not found.",
+        )
+
+    if previous["status"] != "pending_review":
+        raise HTTPException(
+            status_code=409,
+            detail="Only a SOW pending review can be updated.",
+        )
+
+    if not request.transcript.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Follow-up transcript cannot be empty.",
+        )
+
+    try:
+        analysis = analyze_transcript(request.transcript)
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    # Compare the new analysis against the previous SOW scope.
+    previous_scope = {
+        item["text"] for item in previous["scope"]
+    }
+
+    updated_scope = {
+        item["text"] for item in analysis["scope"]
+    }
+
+    changes = {
+        "added_scope": sorted(updated_scope - previous_scope),
+        "removed_scope": sorted(previous_scope - updated_scope),
+        "scope_unchanged": previous_scope == updated_scope,
+    }
+
+    feasibility = check_product_feasibility(request.transcript)
+
+    notes = [
+        "Updated using a follow-up meeting transcript.",
+        "Review changes against the original scope before approval.",
+        "Effort estimates, costs, and delivery dates require human validation.",
+        f"Product feasibility status: {feasibility['status']}.",
+    ]
+
+    try:
+        with get_connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE sows
+                SET scope_json = ?,
+                    deliverables_json = ?,
+                    assumptions_json = ?,
+                    exclusions_json = ?,
+                    open_questions_json = ?,
+                    source_transcript = ?,
+                    notes_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status = 'pending_review'
+                """,
+                (
+                    json.dumps(analysis["scope"]),
+                    json.dumps(analysis["deliverables"]),
+                    json.dumps(analysis["assumptions"]),
+                    json.dumps(analysis["exclusions"]),
+                    json.dumps(analysis["open_questions"]),
+                    request.transcript,
+                    json.dumps(notes),
+                    sow_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail="SOW status changed; reload it before updating.",
+                )
+
+    except HTTPException:
+        raise
+
+    except sqlite3.Error as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not update the SOW.",
+        ) from exc
+
+    updated_sow = fetch_sow(sow_id)
+
+    return {
+        "sow": updated_sow,
+        "changes": changes,
+        "product_feasibility": feasibility,
+        "review_required": True,
+    }
+
+
+# ---------------------------------------------------------
+# HUMAN APPROVAL
+# ---------------------------------------------------------
+
 @app.post("/sow/{sow_id}/approve")
 def approve_sow(sow_id: str, request: SOWApprovalRequest):
     reviewer = request.reviewer.strip()
+
     if not reviewer:
         raise HTTPException(
             status_code=422,
@@ -252,6 +542,7 @@ def approve_sow(sow_id: str, request: SOWApprovalRequest):
 
     except HTTPException:
         raise
+
     except sqlite3.Error as exc:
         raise HTTPException(
             status_code=500,
@@ -259,6 +550,7 @@ def approve_sow(sow_id: str, request: SOWApprovalRequest):
         ) from exc
 
     sow = fetch_sow(sow_id)
+
     return {
         "message": "SOW approved.",
         "sow": sow,

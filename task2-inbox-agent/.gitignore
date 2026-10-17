@@ -1,10 +1,14 @@
-
-node_modules/
+﻿node_modules/
 .venv/
 .env
 .env.*
 !.env.example
-data/
+
+# Ignore generated data except the two synthetic evaluation datasets
+/data/*
+!/data/email_dataset_50.json
+!/data/classification_eval_20.json
+
 dist/
 coverage/
 *.log
