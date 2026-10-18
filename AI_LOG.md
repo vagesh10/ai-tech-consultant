@@ -1,22 +1,43 @@
-﻿# AI_LOG — Development Notes
+﻿# AI_LOG — AI Development Record
 
-## Implemented and verified
+## 1. Development work
 
-- Unified three existing services under a root project with a shared PowerShell startup script and root README.
-- Preserved copies of the original task repositories outside the unified root repository before removing nested Git metadata from the active task folders.
-- Task 1: adjusted API startup/environment loading and improved `/ask` error handling. The configured Anthropic account reported insufficient API credits, so mock mode is used for local workflow testing.
-- Task 2: added/verified correction-example retrieval and inclusion in subsequent Knowledge Brain requests; expanded tests for review safeguards and learning behavior.
-- Task 2: evaluated a 50-case synthetic email dataset and a separate 20-case classification dataset. A missed crash-related technical-support case led to a classifier rule update. Subsequent runs reported 50/50 and 20/20 exact matches.
-- Task 3: implemented the Knowledge Brain request helper and a follow-up SOW endpoint. Added tests for follow-up scope comparison, persistence, unknown SOWs, and protection of approved SOWs.
-- Latest recorded Task 3 test run: 11 passed, with two FastAPI deprecation warnings.
+- Combined the three task services into one repository with a shared PowerShell startup script and root README.
+- Updated Task 1 API startup and environment loading, and improved error handling.
+- Switched Task 1 to mock mode for local workflow testing after the configured Anthropic account reported insufficient API credits.
+- Updated Task 2 to store human-corrected draft examples and include relevant examples in subsequent Knowledge Brain requests.
+- Evaluated the deterministic Task 2 classifier against two synthetic datasets: 50 cases and 20 cases. An initial crash-related classification failure led to a rule update; subsequent runs reported 50/50 and 20/20 exact matches.
+- Added Task 3 Knowledge Brain integration and follow-up SOW handling, including scope preservation and tests for persistence and approved-SOW safeguards.
+- Expanded the design and evaluation documentation.
 
-## Current constraints
+## 2. Verified test results
 
-- Genuine Claude generation could not be verified because the Anthropic account has insufficient credits.
-- Task 1 mock answers are not model-quality evidence.
+Latest local test runs on 18 October 2026:
+
+| Task | Result |
+|---|---:|
+| Task 1 — Knowledge Brain | 34 passed |
+| Task 2 — Inbox Agent | 10 passed |
+| Task 3 — Meeting-to-SOW | 11 passed |
+| **Total** | **55 passed** |
+
+Task 1 and Task 3 reported deprecation warnings. These test results verify application behavior covered by the test suites; they do not prove live Claude answer quality.
+
+## 3. Important constraints and decisions
+
+- Genuine Claude generation was not verified because the configured Anthropic account lacked sufficient API credits.
+- Mock responses are for local workflow testing, not evidence of model quality.
 - Task 2 uses rule-based classification and does not send real email.
-- Task 3 uses rule-based transcript extraction and exact-text scope comparison. Its follow-up tests mock Task 1.
-- Cross-model quality, cost, and speed comparisons are pending.
-- Documentation and test counts should be refreshed after subsequent code changes.
+- Task 3 uses rule-based transcript extraction. Follow-up scope comparison is text-based, and follow-up tests mock the Knowledge Brain response.
+- A genuine comparison of two models for quality, cost, and speed remains outstanding.
+- Evaluation results must describe actual runs; missing measurements must not be invented.
 
-This file records development facts and observed outcomes; it is not a verbatim AI chat log.
+## 4. Required AI interaction records
+
+This file is a development summary, not a verbatim record of every AI interaction.
+
+**Complete AI coding-tool chat history:** attach or include the actual exported conversation history from the AI coding tool used during development. Do not reconstruct missing messages from memory and present them as verbatim history.
+
+**Five useful prompts:** select five actual prompts from that history and include their exact wording with a short explanation of the work each supported.
+
+**One rejected AI answer:** identify an actual AI-generated answer that was rejected or materially corrected. Include the original answer, why it was unsuitable, and the correction or decision that followed. If no such example has been documented, record that it still needs to be supplied rather than inventing one.
