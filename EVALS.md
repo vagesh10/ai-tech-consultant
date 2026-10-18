@@ -128,3 +128,17 @@ Regenerate the classification reports after classifier changes. Results may diff
 The main outstanding evaluation work is to create and run dedicated labeled evaluation sets for Tasks 1 and 3, evaluate email-draft quality separately from classification, and perform a genuine two-model comparison if model access and budget become available.
 
 The prototype also retains implementation limitations documented in `DESIGN.md`: mock-mode knowledge responses, rule-based email classification and transcript extraction, no real email delivery, and incomplete semantic scope comparison.
+
+### Manual follow-up test — 18 October 2026
+
+A manual test generated an SOW for a customer support portal and submitted a follow-up transcript requesting an admin dashboard and weekly unresolved-ticket report, while stating that email notifications were not required for the first release.
+
+Observed results:
+- The original SOW ID was preserved.
+- The follow-up transcript was appended to the stored source transcript.
+- The SOW remained in `pending_review`.
+- `added_scope` was empty and `scope_unchanged` was `true`, despite the new dashboard and reporting requests.
+- The removal of email notifications was not reflected in `removed_scope`.
+- Product feasibility returned `review_required`; the response used mock Knowledge Brain output, not a genuine Claude-generated assessment.
+
+**Outcome: follow-up persistence passed, but scope-change detection failed this manual case.** This demonstrates that the current rule-based extraction and comparison are not reliable enough to guarantee complete scope-change tracking. Human review remains necessary.
