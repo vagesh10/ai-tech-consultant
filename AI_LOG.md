@@ -1,4 +1,4 @@
-﻿# AI_LOG — AI Development Record
+# AI_LOG — AI Development Record
 
 ## 1. Development work
 

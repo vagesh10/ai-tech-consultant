@@ -1,4 +1,4 @@
-﻿# Evaluation Report — AI Tech Consultant
+# Evaluation Report — AI Tech Consultant
 
 ## 1. Evaluation approach
 
@@ -14,7 +14,7 @@ Command:
 
 `python -m pytest tests -q`
 
-The run completed in 73.49 seconds and reported one ChromaDB-related deprecation warning.
+The run completed in 21.03 seconds and reported one ChromaDB-related deprecation warning.
 
 The existing tests cover API health, answer retrieval, relevant and unrelated queries, citation validation, abstention, escalation creation and resolution, ingestion, and semantic search behavior.
 
@@ -34,7 +34,7 @@ Commands:
 
 `npm test`
 
-The TypeScript build completed successfully. The test run completed in approximately 8.66 seconds.
+The TypeScript build completed successfully. The test run completed in approximately 4.27 seconds.
 
 The tests cover service health, classification, draft creation, feedback metrics, approval without email delivery, rejection, unchanged-draft eligibility, reset behavior after edits or negative feedback, correction-example persistence, and inclusion of corrections in subsequent Knowledge Brain requests.
 
@@ -61,7 +61,7 @@ Command:
 
 `python -m pytest tests -q`
 
-The run completed in 1.53 seconds and reported two FastAPI lifecycle deprecation warnings.
+The run completed in 1.48 seconds and reported two FastAPI lifecycle deprecation warnings.
 
 The tests cover health checks, transcript analysis, empty-input validation, SOW generation and retrieval, persistence across application startup, approval safeguards, follow-up scope changes, transcript-history preservation, and rejection of follow-ups to approved SOWs.
 

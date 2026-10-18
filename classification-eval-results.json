@@ -1,10 +1,10 @@
 {
-  "dataset": "classification_eval_20.json",
-  "totalCases": 20,
+  "dataset": "email_dataset_50.json",
+  "totalCases": 50,
   "categoryAccuracy": "100.0%",
   "priorityAccuracy": "100.0%",
   "exactMatchAccuracy": "100.0%",
-  "passed": 20,
+  "passed": 50,
   "failed": 0,
   "failures": [],
   "note": "These are measured classifier results for the current /classify endpoint, not LLM draft-quality or model-comparison results."
