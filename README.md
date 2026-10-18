@@ -59,10 +59,11 @@ Set-Location ..
 
 ## Current limitations
 
-- Task 2 approval does not send an email.
-- Task 3 currently uses rule-based transcript extraction and requires human approval.
-- Genuine Claude generation and complete end-to-end AI workflows must be verified separately.
-- Evaluation results should reflect actual measured runs, not estimates.
+- Task 1 is configured for mock mode locally; mock responses are not genuine Claude-generated answers.
+- Task 2 uses rule-based classification and does not send real emails.
+- Task 3 uses rule-based transcript extraction. A manual follow-up test failed to detect added scope and a requested removal, so scope changes require careful human review.
+- Genuine Claude generation, cross-model comparisons, and complete end-to-end AI quality remain unverified.
+- See `EVALS.md` for observed test results and evaluation gaps.
 
 ## Project structure
 
